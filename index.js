@@ -246,13 +246,13 @@ function downLoadFile(urlPicture) {
       encoding: 'binary',
     },
     (err, response, body) => {
-      if (err) return console.log('Ошибка', err);
+      if (err) return console.log('Ошибка ', err);
       fs.writeFile(
         `src\/pictures\/${Date.now()}.png`,
         body,
         'binary',
         (err) => {
-          if (err) return console.log('Ошибка2', err);
+          if (err) return console.log('Ошибка 2 ', err);
         }
       );
     }
