@@ -146,6 +146,7 @@ function countPages() {
     })
     .catch(function (err) {
       throw err;
+      _;
     });
 }
 
