@@ -12,6 +12,7 @@
     ".tonic_example.js"
   ],
   "scripts": {
+    "start": "nodemon run index.js",
     "eslint": "eslint lib/{compile/,}*.js spec/{**/,}*.js scripts --ignore-pattern spec/JSON-Schema-Test-Suite",
     "jshint": "jshint lib/{compile/,}*.js",
     "lint": "npm run jshint && npm run eslint",
@@ -42,7 +43,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ajv-validator/ajv.git"
+    "url": "git+https://github.com/ajv-validator/ajv.git"
   },
   "keywords": [
     "JSON",
@@ -62,10 +63,18 @@
   "homepage": "https://github.com/ajv-validator/ajv",
   "tonicExampleFilename": ".tonic_example.js",
   "dependencies": {
+    "cheerio": "^1.0.0-rc.10",
     "fast-deep-equal": "^3.1.1",
     "fast-json-stable-stringify": "^2.0.0",
+    "fs": "^0.0.1-security",
     "json-schema-traverse": "^0.4.1",
-    "uri-js": "^4.2.2"
+    "lodash": "^4.17.21",
+    "node-telegram-bot-api": "^0.54.0",
+    "nodemon": "^2.0.12",
+    "request": "^2.88.2",
+    "request-promise": "^4.2.6",
+    "uri-js": "^4.2.2",
+    "xmlhttprequest": "^1.8.0"
   },
   "devDependencies": {
     "ajv-async": "^1.0.0",
