@@ -9,7 +9,7 @@ const rp = require('request-promise');
 const XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest;
 const tress = require('tress');
 const urlPikabu =
-  'https://pikabu.ru/tag/%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D0%B9%20%D1%8E%D0%BC%D0%BE%D1%80?n=4&r=9';
+  'https://pikabu.ru/tag/%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D0%B9%20%D1%8E%D0%BC%D0%BE%D1%80?n=4&r=8';
 //'https://pikabu.ru/tag/%D0%9F%D0%B0%D1%80%D0%B0%D0%BC%D1%83%D1%88%D0%B8%D1%80?n=4';
 
 const bot = new TelegramBot(TOKEN, {
@@ -154,33 +154,33 @@ function getImages(pages) {
   console.log('Downloading files...');
 
   for (j = 1; j <= 1; j++) {
-    const q = tress(function (url, callback) {
-      //тут мы обрабатываем страницу с адресом url
-      needle.get(url, function (err, res) {
-        if (err) throw err;
+    // const q = tress(function (url, callback) {
+    //   //тут мы обрабатываем страницу с адресом url
+    //   needle.get(url, function (err, res) {
+    //     if (err) throw err;
 
-        // здесь делаем парсинг страницы из res.body
-        // делаем results.push для данных о новости
-        // делаем q.push для ссылок на обработку
+    //     // здесь делаем парсинг страницы из res.body
+    //     // делаем results.push для данных о новости
+    //     // делаем q.push для ссылок на обработку
 
-        callback(); //вызываем callback в конце
-      });
-    });
+    //     callback(); //вызываем callback в конце
+    //   });
+    // });
 
-    // эта функция выполнится, когда в очереди закончатся ссылки
-    q.drain = function () {
-      require('fs').writeFileSync(
-        './data.json',
-        JSON.stringify(results, null, 4)
-      );
-    };
+    // // эта функция выполнится, когда в очереди закончатся ссылки
+    // q.drain = function () {
+    //   require('fs').writeFileSync(
+    //     './data.json',
+    //     JSON.stringify(results, null, 4)
+    //   );
+    // };
 
-    // добавляем в очередь ссылку на первую страницу списка
-    q.push(URL);
+    // // добавляем в очередь ссылку на первую страницу списка
+    // q.push(URL);
 
     //console.log('=================================================/nj=', j);
     //console.log(rp(urlPikabu + `&page=${j}`));
-    /* ORIGIN
+    /* ORIGIN*/
     rp(urlPikabu + `&page=${j}`).then((html) => {
       console.log('***********');
       $ = cheerio.load(html);
@@ -197,7 +197,7 @@ function getImages(pages) {
         downLoadFile(urlPicture);
       }
     });
-    END ORIGIN*/
+    /*END ORIGIN*/
 
     /*START ORIGIN 2
     let xhr = new XMLHttpRequest();
