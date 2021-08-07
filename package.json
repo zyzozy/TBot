@@ -494,6 +494,7 @@
     "mkdirp-classic": "^0.5.3",
     "module-deps": "^6.2.3",
     "ms": "^2.1.2",
+    "mysql2": "^2.3.0",
     "nanoid": "^3.1.20",
     "natural-compare": "^1.4.0",
     "negotiator": "^0.6.2",
@@ -503,6 +504,7 @@
     "node-fetch": "^2.6.1",
     "node-preload": "^0.2.1",
     "node-releases": "^1.1.73",
+    "node-schedule": "^2.0.0",
     "node-telegram-bot-api": "^0.54.0",
     "nodemon": "^2.0.12",
     "nodent": "^3.2.13",
@@ -793,7 +795,7 @@
     "mocha": "^8.4.0"
   },
   "scripts": {
-    "test1": "mocha"
+    "start": "nodemon index.js"
   },
   "repository": {
     "type": "git",
