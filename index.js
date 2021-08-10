@@ -21,6 +21,39 @@ const bot = new TelegramBot(TOKEN, {
   polling: true,
 });
 
+// bot.onText(/qqq/, (msg) => {
+//   tryKeyBoard(msg);
+// });
+
+bot.on('callback_query', function onCallbackQuery(callbackQuery) {
+  const action = callbackQuery.data;
+  const msg = callbackQuery.message;
+  const opts = {
+    chat_id: msg.chat.id,
+    message_id: msg.message_id,
+  };
+  let text;
+  console.log(action);
+  if (action === 'like') {
+    text = 'You hit Like';
+  } else {
+    text = 'You hit dislike';
+  }
+
+  bot.sendMessage(msg.chat.id, text);
+});
+
+// function tryKeyBoard(msg) {
+//   bot.sendMessage(msg.chat.id, 'text', {
+//     reply_markup: {
+//       inline_keyboard: [
+//         [{ text: 'button 1', callback_data: '1' }],
+//         [{ text: '👍', callback_data: '2' }],
+//       ],
+//     },
+//   });
+// }
+
 bot.onText(/мем/, (msg) => {
   getFromDB(msg.chat.id, 2);
 });
@@ -97,8 +130,9 @@ function makeQuery(sqlCheck, urlPicture) {
   });
 }
 function getFromDB(chatId, id) {
-  const sqlText = 'SELECT url, id FROM urls ORDER BY RAND() LIMIT 1';
-  connection.query(sqlText, function (err, rows, fields) {
+  const sqlText =
+    'select id, url from urls where id not in (select id_urls from alreadyPosted where id_user = ?) order by rand() limit 1';
+  connection.query(sqlText, [chatId], function (err, rows, fields) {
     if (err) throw err;
     if (rows.length) {
       downLoadFile(rows[0].url, rows[0].id, chatId);
@@ -138,15 +172,27 @@ async function saveFile(body) {
 function sendPhotoToChat(fileName, photoId, chatId) {
   fs.readFile(fileName, (err, picture) => {
     if (err) throw err;
-    bot.sendPhoto(chatId, picture);
+    bot.sendPhoto(chatId, picture, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '👍🏾', callback_data: 'like' },
+            { text: '👎🏾', callback_data: 'dislike' },
+          ],
+        ],
+      },
+    });
     deleteFile(fileName);
     setToDBAlreadyPosted(chatId, photoId);
   });
 }
 
 function setToDBAlreadyPosted(chatId, photoId) {
-  const sqlText = 'INSERT INTO alreadyPosted(id_urls, id_user) VALUES (?,?)';
-  connection.query(sqlText, [photoId, chatId], function (err, rows, fields) {
+  //const sqlText = 'INSERT INTO alreadyPosted(id_urls, id_user) VALUES (?,?)';
+
+  const sqlText =
+    'INSERT INTO alreadyPosted (id_urls, id_user) SELECT id, ? FROM urls WHERE id = ?';
+  connection.query(sqlText, [chatId, photoId], function (err, rows, fields) {
     if (err) throw err;
   });
 }
