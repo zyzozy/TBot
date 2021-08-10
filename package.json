@@ -701,6 +701,7 @@
     "strip-outer": "^1.0.1",
     "subarg": "^1.0.0",
     "supports-color": "^7.2.0",
+    "sync": "^0.2.5",
     "syntax-error": "^1.4.0",
     "table": "^6.7.1",
     "tar-fs": "^2.1.1",
