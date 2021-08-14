@@ -1,209 +1,332 @@
 const TelegramBot = require('node-telegram-bot-api');
-const TOKEN = '1929663164:AAHJof-svXvEoVStXmR-6XZRyHv17bwLMOU';
-const _ = require('lodash');
-const fs = require('fs');
-const request = require('request');
 const cheerio = require('cheerio');
 const rp = require('request-promise');
-const urlPikabu =
-  'https://pikabu.ru/tag/%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D0%B9%20%D1%8E%D0%BC%D0%BE%D1%80?n=4&r=8';
 const schedule = require('node-schedule');
 const mysql = require('mysql2');
+require('dotenv').config();
 
+const TOKEN = process.env.BOT_TOKEN;
+let numberOfAttempts = 0;
+
+console.log(process.env.DB_USER);
 const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  database: 'test',
-  password: 'tbotpass',
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  database: process.env.DB_BASE,
+  password: process.env.DB_PASSWORD,
 });
 
 const bot = new TelegramBot(TOKEN, {
   polling: true,
 });
 
-// bot.onText(/qqq/, (msg) => {
-//   tryKeyBoard(msg);
-// });
+bot.on('message', (msg) => {
+  switch (true) {
+    case msg.text.toLowerCase().includes('бро') &&
+      msg.text.toLowerCase().includes('мем'):
+      getFromDB(msg.chat.id);
+      break;
+    case msg.text === 'pars':
+      parsePikabu();
+      break;
+    case msg.text.includes('%') && msg.text.toLowerCase().includes('мем'):
+      let tags = createTagList(msg.text);
+      getRandomMemByTag(tags, msg.chat.id);
+      break;
+  }
+});
 
-bot.on('callback_query', function onCallbackQuery(callbackQuery) {
+bot.on('callback_query', async function onCallbackQuery(callbackQuery) {
   const action = callbackQuery.data;
   const msg = callbackQuery.message;
-  const opts = {
-    chat_id: msg.chat.id,
-    message_id: msg.message_id,
-  };
-  let text;
-  console.log(action);
-  if (action === 'like') {
-    text = 'You hit Like';
+  const user = callbackQuery.from;
+  const mass = action.split(' ');
+
+  //console.log(callbackQuery);
+  if (mass[0] === 'like') {
+    await checkUrlInLikeRates(mass[1], user.id, 1, msg.message_id, msg.chat.id);
   } else {
-    text = 'You hit dislike';
+    await checkUrlInLikeRates(
+      mass[1],
+      user.id,
+      -1,
+      msg.message_id,
+      msg.chat.id
+    );
   }
-
-  bot.sendMessage(msg.chat.id, text);
+  if (msg.chat.type == 'private') {
+    getFromDB(msg.chat.id);
+  }
 });
 
-// function tryKeyBoard(msg) {
-//   bot.sendMessage(msg.chat.id, 'text', {
-//     reply_markup: {
-//       inline_keyboard: [
-//         [{ text: 'button 1', callback_data: '1' }],
-//         [{ text: '👍', callback_data: '2' }],
-//       ],
-//     },
-//   });
-// }
+async function changeRateInCaption(msgId, chatId, photoId) {
+  let ratePhoto = await makeQueryAllLikes([photoId]);
 
-bot.onText(/мем/, (msg) => {
-  getFromDB(msg.chat.id, 2);
-});
+  bot.editMessageCaption(`🤍 ${ratePhoto}`, {
+    chat_id: chatId,
+    message_id: msgId,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '👍🏾', callback_data: `like ${photoId}` },
+          { text: '👎🏾', callback_data: `dislike ${photoId}` },
+        ],
+      ],
+    },
+  });
+}
 
-bot.onText(/pars/, (msg) => {
-  parsePikabu();
-});
+function createTagList(textTags) {
+  let newMassTags = [];
+  let tagSubstr = textTags.substring(textTags.indexOf('%') + 1);
 
-const parsePikabu = function parsePikabu() {
-  console.log('Start parsing pikabu.ru...');
+  massTags = tagSubstr.split(',');
+  massTags.forEach((element) => {
+    newMassTags.push(element.trim());
+  });
 
-  countPages();
-};
+  return newMassTags.join(',');
+}
 
-function countPages() {
-  const postsCount = 0;
+async function getRandomMemByTag(tags, chatId) {
+  numberOfAttempts++;
+  let url = encodeURI(`https://pikabu.ru/tag/мемы,${tags}?n=4&r=7`);
+  let numberOfPages = await countPagesOnSite(url);
+  let urlRandomPicture = await getRandomImageFromSite(numberOfPages, url);
+  if (urlRandomPicture !== '') {
+    let insertId = await addToDB(urlRandomPicture);
+    if (insertId) {
+      sendPhotoToChat(urlRandomPicture, insertId, chatId);
+    } else {
+      if (numberOfAttempts < 10) {
+        getRandomMemByTag(tags, chatId);
+      } else {
+        bot.sendMessage(chatId, 'Пока ничего новенького, бро!');
+      }
+    }
+  } else {
+    bot.sendMessage(
+      chatId,
+      'Бро, ты либо сформулируй нормально, либо придумывай такие мемы сам!'
+    );
+  }
+}
 
-  rp(urlPikabu)
+async function getRandomImageFromSite(numberOfPages, url) {
+  randomPage = Math.floor(Math.random() * numberOfPages);
+  let randomUrl = '';
+  return await rp(url + `&page=${randomPage}`).then((html) => {
+    $ = cheerio.load(html);
+    const allPictures = $('img.story-image__image', html);
+    if (allPictures.length) {
+      randomImage = Math.floor(Math.random() * allPictures.length);
+      randomUrl = $('img.story-image__image', html)[randomImage].attribs[
+        'data-large-image'
+      ];
+    }
+    return randomUrl;
+  });
+}
+
+async function countPagesOnSite(url) {
+  return await rp(url)
     .then(function (html) {
-      console.log(`Counting pages...`);
       $ = cheerio.load(html);
       const postsCount = parseInt(
         $('div.stories-search__feed-panel > span', html).text().split(' ')[0]
       );
-      const pages = Math.ceil(postsCount / 10);
-      console.log(pages);
-      getImages(pages);
+      return Math.ceil(postsCount / 10);
     })
     .catch((err) => {
       throw err;
     });
 }
 
-async function getImages(pages) {
-  //console.log('Downloading files...');
+async function checkUrlInLikeRates(photoId, userId, rate, messageId, chatId) {
+  const sqlCheck = 'select * from likeRates where id_user = ? and id_urls = ?';
+  const sqlInsert =
+    'INSERT INTO likeRates(id_user, id_urls, rate) VALUES (?, ?, ?)';
+  let alreadyHaveUrl = false;
 
-  //  for (j = 1; j <= pages; j++) {
-  for (j = 1; j <= 6; j++) {
-    await rp(urlPikabu + `&page=${j}`).then((html) => {
+  alreadyHaveUrl = await makeQueryCheck(sqlCheck, [userId, photoId]);
+  if (alreadyHaveUrl == false) {
+    connection.query(sqlInsert, [userId, photoId, rate], (err) => {
+      if (err) throw err;
+      changeRateInCaption(messageId, chatId, photoId);
+    });
+  }
+}
+
+const parsePikabu = async function parsePikabu() {
+  console.log('Start parsing pikabu.ru...');
+  const urlPikabu =
+    'https://pikabu.ru/tag/%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D0%B9%20%D1%8E%D0%BC%D0%BE%D1%80/best?n=4&r=7';
+  let numberOfPages = await countPagesOnSite(urlPikabu);
+  await getAllImagesFromSite(numberOfPages, urlPikabu);
+  console.log('End parsing pikabu.ru!');
+};
+
+async function getAllImagesFromSite(pages, url) {
+  //console.log('Downloading files...');
+  console.log('Number of pages: ', pages);
+  let counter = 0;
+  for (j = 1; j <= pages; j++) {
+    console.log('Page ', j);
+    await rp(url + `&page=${j}`).then(async (html) => {
       $ = cheerio.load(html);
       const allPictures = $('img.story-image__image', html);
-      for (let i = 0; i < 1; i++) {
-        if (i <= allPictures.length - 1) {
-          const urlPicture = $('img.story-image__image', html)[i].attribs[
-            'data-large-image'
-          ];
-          addToDB(urlPicture);
+      for (let i = 0; i < allPictures.length - 1; i++) {
+        const urlPicture = $('img.story-image__image', html)[i].attribs[
+          'data-large-image'
+        ];
+        insertId = await addToDB(urlPicture);
+        if (insertId) {
+          counter++;
         }
       }
     });
   }
+  console.log(`Added ${counter} images`);
 }
 
 async function addToDB(urlPicture) {
   const sqlCheck = 'SELECT * FROM urls WHERE url = ?';
   const sqlInsert = 'INSERT INTO urls(url) VALUES (?)';
   let alreadyHaveUrl = false;
-
-  alreadyHaveUrl = await makeQuery(sqlCheck, urlPicture);
-
+  let insertId = 0;
+  alreadyHaveUrl = await makeQueryCheck(sqlCheck, [urlPicture]);
   if (alreadyHaveUrl == false) {
-    connection.query(sqlInsert, [urlPicture], function (err, rows, fields) {
-      if (err) throw err;
-    });
+    insertId = await makeQueryInsert(sqlInsert, [urlPicture]);
   }
+  return insertId;
 }
 
-function makeQuery(sqlCheck, urlPicture) {
+function makeQueryInsert(sqlText, params) {
+  return new Promise((resolve) => {
+    connection.query(sqlText, params, function (err, result) {
+      if (err) throw err;
+      resolve(result.insertId);
+    });
+  });
+}
+
+function makeQueryCheck(sqlCheck, params) {
   return new Promise((resolve, reject) => {
-    connection.query(sqlCheck, [urlPicture], function (err, rows, fields) {
+    connection.query(sqlCheck, params, function (err, rows) {
       if (err) reject(err);
       resolve(rows.length);
     });
   });
 }
-function getFromDB(chatId, id) {
+
+function makeQueryAllLikes(params) {
+  return new Promise((resolve, reject) => {
+    const sqlText =
+      'select ifnull(sum(rate),0) as sumLike from likerates where id_urls = ?';
+    connection.query(sqlText, params, function (err, rows) {
+      let allLikes = 0;
+      if (err) reject(err);
+      if (rows.length) {
+        allLikes = rows[0].sumLike;
+      }
+      resolve(allLikes);
+    });
+  });
+}
+
+function getFromDB(chatId) {
   const sqlText =
-    'select id, url from urls where id not in (select id_urls from alreadyPosted where id_user = ?) order by rand() limit 1';
-  connection.query(sqlText, [chatId], function (err, rows, fields) {
+    'select u.id, u.url, ifnull(r.rate,0) from urls u left join (select id_urls, sum(rate) as rate from likerates group by(id_urls)) r on u.id = r.id_urls where id not in (select id_urls from alreadyPosted where id_user = ?) order by ifnull(r.rate,0) desc, rand() limit 1;';
+  connection.query(sqlText, [chatId], function (err, rows) {
     if (err) throw err;
     if (rows.length) {
-      downLoadFile(rows[0].url, rows[0].id, chatId);
+      sendPhotoToChat(rows[0].url, rows[0].id, chatId);
+      //downLoadFile(rows[0].url, rows[0].id, chatId);
     } else {
       bot.sendMessage(chatId, 'Новых мемасиков еще не наклепали');
     }
   });
 }
-async function downLoadFile(urlPicture, photoId, chatId) {
-  var request1 = request.get(
-    {
-      url: urlPicture,
-      encoding: 'binary',
-    },
-    async (err, response, body) => {
-      if (err) throw err;
-      // const fileName = `src\/pictures\/${Date.now()}.png`;
-      // fs.writeFile(fileName, body, 'binary', (err) => {
-      //   if (err) throw err;
-      // });
-      fileName = await saveFile(body);
 
-      sendPhotoToChat(fileName, photoId, chatId);
-    }
-  );
-}
-
-async function saveFile(body) {
-  return new Promise((resolve, reject) => {
-    const fileName = `src\/pictures\/${Date.now()}.png`;
-    fs.writeFile(fileName, body, 'binary', (err) => {
-      if (err) reject(err);
-      resolve(fileName);
-    });
-  });
-}
-function sendPhotoToChat(fileName, photoId, chatId) {
-  fs.readFile(fileName, (err, picture) => {
-    if (err) throw err;
-    bot.sendPhoto(chatId, picture, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '👍🏾', callback_data: 'like' },
-            { text: '👎🏾', callback_data: 'dislike' },
-          ],
+async function sendPhotoToChat(URLPhoto, photoId, chatId) {
+  let ratePhoto = await makeQueryAllLikes([photoId]);
+  bot.sendPhoto(chatId, URLPhoto, {
+    caption: `🤍 ${ratePhoto}`,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '👍🏾', callback_data: `like ${photoId}` },
+          { text: '👎🏾', callback_data: `dislike ${photoId}` },
         ],
-      },
-    });
-    deleteFile(fileName);
-    setToDBAlreadyPosted(chatId, photoId);
+      ],
+    },
   });
+  numberOfAttempts = 0;
+  setToDBAlreadyPosted(chatId, photoId);
 }
 
 function setToDBAlreadyPosted(chatId, photoId) {
-  //const sqlText = 'INSERT INTO alreadyPosted(id_urls, id_user) VALUES (?,?)';
-
   const sqlText =
     'INSERT INTO alreadyPosted (id_urls, id_user) SELECT id, ? FROM urls WHERE id = ?';
-  connection.query(sqlText, [chatId, photoId], function (err, rows, fields) {
-    if (err) throw err;
-  });
-}
-
-function deleteFile(fileName) {
-  fs.unlink(fileName, (err) => {
+  connection.query(sqlText, [chatId, photoId], (err) => {
     if (err) throw err;
   });
 }
 
 const job = schedule.scheduleJob('57 * * * *', parsePikabu);
+
+// function countPages() {
+//   const postsCount = 0;
+
+//   rp(urlPikabu)
+//     .then(function (html) {
+//       console.log(`Counting pages...`);
+//       $ = cheerio.load(html);
+//       const postsCount = parseInt(
+//         $('div.stories-search__feed-panel > span', html).text().split(' ')[0]
+//       );
+//       const pages = Math.ceil(postsCount / 10);
+//       getAllImagesFromSite(pages);
+//     })
+//     .catch((err) => {
+//       throw err;
+//     });
+// }
+
+// async function downLoadFile(urlPicture, photoId, chatId) {
+//   var request1 = request.get(
+//     {
+//       url: urlPicture,
+//       encoding: 'binary',
+//     },
+//     async (err, response, body) => {
+//       if (err) throw err;
+//       // const fileName = `src\/pictures\/${Date.now()}.png`;
+//       // fs.writeFile(fileName, body, 'binary', (err) => {
+//       //   if (err) throw err;
+//       // });
+//       fileName = await saveFile(body);
+
+//       sendPhotoToChat(urlPicture, photoId, chatId);
+//     }
+//   );
+// }
+
+// async function saveFile(body) {
+//   return new Promise((resolve, reject) => {
+//     const fileName = `src\/pictures\/${Date.now()}.png`;
+//     fs.writeFile(fileName, body, 'binary', (err) => {
+//       if (err) reject(err);
+//       resolve(fileName);
+//     });
+//   });
+// }
+
+// function deleteFile(fileName) {
+//   fs.unlink(fileName, (err) => {
+//     if (err) throw err;
+//   });
+// }
 
 //----------------------------------
 // bot.on('message', (msg) => {

@@ -3,4 +3,5 @@ node_modules/
 scr/pictures
 node_modules
 scr/pictures/
+.env
 
